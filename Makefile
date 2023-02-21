@@ -22,4 +22,4 @@ docker-build:
 
 .PHONY: offsets
 offsets:
-	cd offsets-tracker; go run main.go
+	cd offsets-tracker; go get .; go run main.go

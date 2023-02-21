@@ -1,0 +1,22 @@
+name: Automatic Offset Generation
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  updateOffsets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Update offsets
+        run: make offsets
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v4
+        with:
+          commit-message: Update generated offsets
+          branch: automated/generated-offsets
+          delete-branch: true
+          title: '[auto] Update generated offsets'
+          body: 'This is an automated PR to update the generated Go field offsets.'

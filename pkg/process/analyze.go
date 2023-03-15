@@ -26,7 +26,12 @@ import (
 
 	"github.com/hashicorp/go-version"
 	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/log"
+	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/process/ptrace"
 	"golang.org/x/arch/x86/x86asm"
+)
+
+const (
+	mapSize = 15 * 1024 * 1024
 )
 
 type TargetDetails struct {
@@ -97,6 +102,30 @@ func findKeyvalMmap(pid int) *AllocationDetails {
 	return nil
 }
 
+func (a *processAnalyzer) remoteMmap(pid int, mapSize uint64) (uint64, error) {
+	program, err := ptrace.Trace(pid, log.Logger)
+	if err != nil {
+		log.Logger.Error(err, "Failed to attach ptrace", "pid", pid)
+		return 0, err
+	}
+
+	defer func() {
+		log.Logger.V(0).Info("Detaching from process", "pid", pid)
+		err := program.Detach()
+		if err != nil {
+			log.Logger.Error(err, "Failed to detach ptrace", "pid", pid)
+		}
+	}()
+	fd := -1
+	addr, err := program.Mmap(mapSize, uint64(fd))
+	if err != nil {
+		log.Logger.Error(err, "Failed to mmap", "pid", pid)
+		return 0, err
+	}
+
+	return addr, nil
+}
+
 func (a *processAnalyzer) Analyze(pid int, relevantFuncs map[string]interface{}) (*TargetDetails, error) {
 	result := &TargetDetails{
 		PID: pid,
@@ -120,7 +149,18 @@ func (a *processAnalyzer) Analyze(pid int, relevantFuncs map[string]interface{})
 	result.GoVersion = goVersion
 	result.Libraries = modules
 
-	result.AllocationDetails = findKeyvalMmap(pid)
+	addr, err := a.remoteMmap(pid, mapSize)
+	if err != nil {
+		log.Logger.Error(err, "Failed to mmap")
+		return nil, err
+	}
+	log.Logger.V(0).Info("mmaped remote memory", "start_addr", fmt.Sprintf("%X", addr),
+		"end_addr", fmt.Sprintf("%X", addr+mapSize))
+
+	result.AllocationDetails = &AllocationDetails{
+		Addr:    addr,
+		EndAddr: addr + mapSize,
+	}
 
 	var pclndat []byte
 	if sec := elfF.Section(".gopclntab"); sec != nil {

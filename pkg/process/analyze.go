@@ -22,8 +22,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/prometheus/procfs"
-
 	"github.com/hashicorp/go-version"
 	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/log"
 	"github.com/open-telemetry/opentelemetry-go-instrumentation/pkg/process/ptrace"
@@ -76,30 +74,6 @@ func (t *TargetDetails) GetFunctionReturns(name string) ([]uint64, error) {
 	}
 
 	return nil, fmt.Errorf("could not find returns for function %s", name)
-}
-
-func findKeyvalMmap(pid int) *AllocationDetails {
-	fs, err := procfs.NewProc(pid)
-	if err != nil {
-		panic(err)
-	}
-
-	maps, err := fs.ProcMaps()
-	if err != nil {
-		panic(err)
-	}
-
-	for _, m := range maps {
-		if m.Perms != nil && m.Perms.Read && m.Perms.Write && m.Perms.Execute {
-			log.Logger.Info("found addr of keyval map", "addr", m.StartAddr)
-			return &AllocationDetails{
-				StartAddr: uint64(m.StartAddr),
-				EndAddr:   uint64(m.EndAddr),
-			}
-		}
-	}
-	log.Logger.V(1).Info("could not allocate remote memory, automatic context propagation will be disabled")
-	return nil
 }
 
 func (a *processAnalyzer) remoteMmap(pid int, mapSize uint64) (uint64, error) {

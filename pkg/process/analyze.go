@@ -132,8 +132,8 @@ func (a *processAnalyzer) Analyze(pid int, relevantFuncs map[string]interface{})
 		"end_addr", fmt.Sprintf("%X", addr+mapSize))
 
 	result.AllocationDetails = &AllocationDetails{
-		Addr:    addr,
-		EndAddr: addr + mapSize,
+		StartAddr: addr,
+		EndAddr:   addr + mapSize,
 	}
 
 	var pclndat []byte

@@ -52,18 +52,19 @@ func (id ID) String() string {
 // NewManifest returns a new Manifest for the instrumentation probe with name
 // that instruments pkg. The structfields and symbols will be sorted in-place
 // and added directly to the returned Manifest.
+// Structfields are sorted by ModPath, PkgPath, Struct, and Field.
 func NewManifest(id ID, structfields []structfield.ID, symbols []string) Manifest {
 	sort.Slice(structfields, func(i, j int) bool {
-		if structfields[i].ModPath == structfields[j].ModPath {
-			if structfields[i].PkgPath == structfields[j].PkgPath {
-				if structfields[i].Struct == structfields[j].Struct {
-					return structfields[i].Field < structfields[j].Field
-				}
-				return structfields[i].Struct < structfields[j].Struct
-			}
+		if structfields[i].ModPath != structfields[j].ModPath {
+			return structfields[i].ModPath < structfields[j].ModPath
+		}
+		if structfields[i].PkgPath != structfields[j].PkgPath {
 			return structfields[i].PkgPath < structfields[j].PkgPath
 		}
-		return structfields[i].ModPath < structfields[j].ModPath
+		if structfields[i].Struct != structfields[j].Struct {
+			return structfields[i].Struct < structfields[j].Struct
+		}
+		return structfields[i].Field < structfields[j].Field
 	})
 
 	sort.Strings(symbols)

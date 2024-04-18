@@ -38,7 +38,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// copied from instrumentation.go
+// copied from instrumentation.go.
 func instResource() *resource.Resource {
 	runVer := strings.TrimPrefix(runtime.Version(), "go")
 	runName := runtime.Compiler
@@ -76,7 +76,10 @@ func TestTrace(t *testing.T) {
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(instResource()),
 	)
-	defer tp.Shutdown(context.Background())
+	defer func() {
+		err := tp.Shutdown(context.Background())
+		assert.NoError(t, err)
+	}()
 
 	ctrl, err := NewController(logger, tp, "test")
 	assert.NoError(t, err)

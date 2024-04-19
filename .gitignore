@@ -34,3 +34,5 @@ internal/test/**/traces-orig.json
 *.db
 
 examples/rolldice/rolldice
+
+go.work*

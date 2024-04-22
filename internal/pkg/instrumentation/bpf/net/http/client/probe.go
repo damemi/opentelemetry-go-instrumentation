@@ -248,16 +248,16 @@ type event struct {
 	StatusCode  uint64
 	Method      [10]byte
 	Path        [100]byte
-	Scheme      [100]byte
-	Opaque      [100]byte
-	UrlHost     [100]byte
-	RawPath     [100]byte
+	Scheme      [8]byte
+	Opaque      [8]byte
+	UrlHost     [8]byte
+	RawPath     [8]byte
 	OmitHost    int
 	ForceQuery  int
-	RawQuery    [100]byte
-	Fragment    [100]byte
-	RawFragment [100]byte
-	Username    [100]byte
+	RawQuery    [8]byte
+	Fragment    [8]byte
+	RawFragment [8]byte
+	Username    [8]byte
 }
 
 func convertEvent(e *event) []*probe.SpanEvent {

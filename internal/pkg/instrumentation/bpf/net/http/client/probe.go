@@ -16,6 +16,7 @@ package client
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -262,6 +263,16 @@ type event struct {
 func convertEvent(e *event) []*probe.SpanEvent {
 	method := unix.ByteSliceToString(e.Method[:])
 	path := unix.ByteSliceToString(e.Path[:])
+	scheme := unix.ByteSliceToString(e.Scheme[:])
+	opaque := unix.ByteSliceToString(e.Opaque[:])
+	urlHost := unix.ByteSliceToString(e.UrlHost[:])
+	rawPath := unix.ByteSliceToString(e.RawPath[:])
+	omitHost := e.OmitHost != 0
+	forceQuery := e.ForceQuery != 0
+	rawQuery := unix.ByteSliceToString(e.RawQuery[:])
+	fragment := unix.ByteSliceToString(e.Fragment[:])
+	rawFragment := unix.ByteSliceToString(e.RawFragment[:])
+	username := unix.ByteSliceToString(e.Username[:])
 
 	sc := trace.NewSpanContext(trace.SpanContextConfig{
 		TraceID:    e.SpanContext.TraceID,
@@ -291,6 +302,22 @@ func convertEvent(e *event) []*probe.SpanEvent {
 		attrs = append(attrs, semconv.URLPath(path))
 	}
 
+	url := &url.URL{
+		Scheme:      scheme,
+		Opaque:      opaque,
+		User:        url.User(username),
+		Host:        urlHost,
+		Path:        path,
+		RawPath:     rawPath,
+		OmitHost:    omitHost,
+		ForceQuery:  forceQuery,
+		RawQuery:    rawQuery,
+		Fragment:    fragment,
+		RawFragment: rawFragment,
+	}
+	fullURL := url.String()
+	attrs = append(attrs, semconv.URLFull(fullURL))
+
 	// Server address and port
 	serverAddr, serverPort := http.ServerAddressPortAttributes(e.Host[:])
 	if serverAddr.Valid() {
@@ -301,7 +328,6 @@ func convertEvent(e *event) []*probe.SpanEvent {
 	}
 
 	proto := unix.ByteSliceToString(e.Proto[:])
-	scheme := ""
 	if proto != "" {
 		parts := strings.Split(proto, "/")
 		if len(parts) == 2 {
@@ -312,9 +338,6 @@ func convertEvent(e *event) []*probe.SpanEvent {
 			attrs = append(attrs, semconv.NetworkProtocolVersion(parts[1]))
 		}
 	}
-
-	fullURL := fmt.Sprintf("%s://%s%s", scheme, serverAddr.Value.AsString(), path)
-	attrs = append(attrs, semconv.URLFull(fullURL))
 
 	spanEvent := &probe.SpanEvent{
 		SpanName:          method,

@@ -124,6 +124,56 @@ func New(logger logr.Logger) probe.Probe {
 				Key: "io_writer_n_pos",
 				Val: structfield.NewID("std", "bufio", "Writer", "n"),
 			},
+			probe.StructFieldConst{
+				Key: "scheme_pos",
+				Val: structfield.NewID("std", "net/url", "URL", "Scheme"),
+			},
+			probe.StructFieldConst{
+				Key: "opaque_pos",
+				Val: structfield.NewID("std", "net/url", "URL", "Opaque"),
+			},
+			probe.StructFieldConst{
+				Key: "user_ptr_pos",
+				Val: structfield.NewID("std", "net/url", "URL", "User"),
+			},
+			probe.StructFieldConst{
+				Key: "url_host_pos",
+				Val: structfield.NewID("std", "net/url", "URL", "Host"),
+			},
+			probe.StructFieldConst{
+				Key: "raw_path_pos",
+				Val: structfield.NewID("std", "net/url", "URL", "RawPath"),
+			},
+			probe.StructFieldConst{
+				Key: "omit_host_pos",
+				Val: structfield.NewID("std", "net/url", "URL", "OmitHost"),
+			},
+			probe.StructFieldConst{
+				Key: "force_query_pos",
+				Val: structfield.NewID("std", "net/url", "URL", "ForceQuery"),
+			},
+			probe.StructFieldConst{
+				Key: "raw_query_pos",
+				Val: structfield.NewID("std", "net/url", "URL", "RawQuery"),
+			},
+			probe.StructFieldConst{
+				Key: "fragment_pos",
+				Val: structfield.NewID("std", "net/url", "URL", "Fragment"),
+			},
+			probe.StructFieldConst{
+				Key: "raw_fragment_pos",
+				Val: structfield.NewID("std", "net/url", "URL", "RawFragment"),
+			},
+			probe.StructFieldConst{
+				Key: "username_pos",
+				Val: structfield.NewID("std", "net/url", "Userinfo", "username"),
+			},
+		},
+		Uprobes: []probe.Uprobe[bpfObjects]{
+			{
+				Sym: "net/http.(*Transport).roundTrip",
+				Fn:  uprobeRoundTrip,
+			},
 		},
 		Uprobes: uprobes,
 		ReaderFn: func(obj bpfObjects) (*perf.Reader, error) {
@@ -192,11 +242,21 @@ func uprobeWriteSubset(name string, exec *link.Executable, target *process.Targe
 // request-response.
 type event struct {
 	context.BaseSpanProperties
-	Host       [256]byte
-	Proto      [8]byte
-	StatusCode uint64
-	Method     [10]byte
-	Path       [100]byte
+	Host        [256]byte
+	Proto       [8]byte
+	StatusCode  uint64
+	Method      [10]byte
+	Path        [100]byte
+	Scheme      [100]byte
+	Opaque      [100]byte
+	UrlHost     [100]byte
+	RawPath     [100]byte
+	OmitHost    int
+	ForceQuery  int
+	RawQuery    [100]byte
+	Fragment    [100]byte
+	RawFragment [100]byte
+	Username    [100]byte
 }
 
 func convertEvent(e *event) []*probe.SpanEvent {

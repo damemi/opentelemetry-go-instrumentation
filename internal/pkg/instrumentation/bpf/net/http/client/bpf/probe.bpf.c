@@ -253,25 +253,21 @@ int uprobe_Transport_roundTrip(struct pt_regs *ctx) {
     // get scheme from Request.URL
     if (!get_go_string_from_user_ptr((void *)(url_ptr+scheme_pos), httpReq->scheme, sizeof(httpReq->scheme))) {
         bpf_printk("uprobe_Transport_roundTrip: Failed to get scheme from Request.URL");
-        return 0;
     }
 
     // get host from Request.URL
     if (!get_go_string_from_user_ptr((void *)(url_ptr+url_host_pos), httpReq->url_host, sizeof(httpReq->url_host))) {
         bpf_printk("uprobe_Transport_roundTrip: Failed to get host from Request.URL");
-        return 0;
     }
 
     // get opaque from Request.URL
     if (!get_go_string_from_user_ptr((void *)(url_ptr+opaque_pos), httpReq->opaque, sizeof(httpReq->opaque))) {
         bpf_printk("uprobe_Transport_roundTrip: Failed to get opaque from Request.URL");
-        return 0;
     }
 
     // get RawPath from Request.URL
     if (!get_go_string_from_user_ptr((void *)(url_ptr+raw_path_pos), httpReq->raw_path, sizeof(httpReq->raw_path))) {
         bpf_printk("uprobe_Transport_roundTrip: Failed to get RawPath from Request.URL");
-        return 0;
     }
 
 /*
@@ -291,19 +287,16 @@ int uprobe_Transport_roundTrip(struct pt_regs *ctx) {
     // get RawQuery from Request.URL
     if (!get_go_string_from_user_ptr((void *)(url_ptr+raw_query_pos), httpReq->raw_query, sizeof(httpReq->raw_query))) {
         bpf_printk("uprobe_Transport_roundTrip: Failed to get RawQuery from Request.URL");
-        return 0;
     }
 
     // get Fragment from Request.URL
     if (!get_go_string_from_user_ptr((void *)(url_ptr+fragment_pos), httpReq->fragment, sizeof(httpReq->fragment))) {
         bpf_printk("uprobe_Transport_roundTrip: Failed to get Fragment from Request.URL");
-        return 0;
     }
 
     // get RawFragment from Request.URL
     if (!get_go_string_from_user_ptr((void *)(url_ptr+raw_fragment_pos), httpReq->raw_fragment, sizeof(httpReq->raw_fragment))) {
         bpf_printk("uprobe_Transport_roundTrip: Failed to get RawFragment from Request.URL");
-        return 0;
     }
 
     // get username from Request.URL.User
@@ -311,7 +304,6 @@ int uprobe_Transport_roundTrip(struct pt_regs *ctx) {
     bpf_probe_read(&user_ptr, sizeof(user_ptr), (void *)(url_ptr+user_ptr_pos));
     if (!get_go_string_from_user_ptr((void *)(user_ptr+username_pos), httpReq->username, sizeof(httpReq->username))) {
         bpf_printk("uprobe_Transport_roundTrip: Failed to get RawQuery from Request.URL");
-        return 0;
     }
 
     // get host from Request

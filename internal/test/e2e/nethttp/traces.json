@@ -113,59 +113,6 @@
               "spanId": "xxxxx",
               "status": {},
               "traceId": "xxxxx"
-            },
-            {
-              "attributes": [
-                {
-                  "key": "http.request.method",
-                  "value": {
-                    "stringValue": "GET"
-                  }
-                },
-                {
-                  "key": "http.response.status_code",
-                  "value": {
-                    "intValue": "200"
-                  }
-                },
-                {
-                  "key": "url.path",
-                  "value": {
-                    "stringValue": "/hello/42"
-                  }
-                },
-                {
-                  "key": "server.address",
-                  "value": {
-                    "stringValue": "localhost"
-                  }
-                },
-                {
-                  "key": "server.port",
-                  "value": {
-                    "intValue": "8080"
-                  }
-                },
-                {
-                  "key": "network.protocol.version",
-                  "value": {
-                    "stringValue": "1.1"
-                  }
-                },
-                {
-                  "key": "url.full",
-                  "value": {
-                    "stringValue": "http://localhost/hello"
-                  }
-                }
-              ],
-              "flags": 256,
-              "kind": 3,
-              "name": "GET",
-              "parentSpanId": "",
-              "spanId": "xxxxx",
-              "status": {},
-              "traceId": "xxxxx"
             }
           ]
         }

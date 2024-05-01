@@ -170,12 +170,6 @@ func New(logger logr.Logger) probe.Probe {
 				Val: structfield.NewID("std", "net/url", "Userinfo", "username"),
 			},
 		},
-		Uprobes: []probe.Uprobe[bpfObjects]{
-			{
-				Sym: "net/http.(*Transport).roundTrip",
-				Fn:  uprobeRoundTrip,
-			},
-		},
 		Uprobes: uprobes,
 		ReaderFn: func(obj bpfObjects) (*perf.Reader, error) {
 			return perf.NewReader(obj.Events, os.Getpagesize())

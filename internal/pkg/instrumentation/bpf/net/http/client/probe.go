@@ -138,10 +138,6 @@ func New(logger logr.Logger) probe.Probe {
 				Val: structfield.NewID("std", "net/url", "URL", "User"),
 			},
 			probe.StructFieldConst{
-				Key: "url_host_pos",
-				Val: structfield.NewID("std", "net/url", "URL", "Host"),
-			},
-			probe.StructFieldConst{
 				Key: "raw_path_pos",
 				Val: structfield.NewID("std", "net/url", "URL", "RawPath"),
 			},
@@ -237,21 +233,22 @@ func uprobeWriteSubset(name string, exec *link.Executable, target *process.Targe
 // request-response.
 type event struct {
 	context.BaseSpanProperties
-	Host        [256]byte
+	Host        [128]byte
 	Proto       [8]byte
 	StatusCode  uint64
 	Method      [10]byte
 	Path        [100]byte
 	Scheme      [8]byte
 	Opaque      [8]byte
-	UrlHost     [8]byte
 	RawPath     [8]byte
-	OmitHost    int
-	ForceQuery  int
-	RawQuery    [8]byte
-	Fragment    [8]byte
-	RawFragment [8]byte
 	Username    [8]byte
+	RawQuery    [128]byte
+	Fragment    [50]byte
+	RawFragment [50]byte
+	/*
+		OmitHost   int
+		ForceQuery  int
+	*/
 }
 
 func convertEvent(e *event) []*probe.SpanEvent {
@@ -259,14 +256,24 @@ func convertEvent(e *event) []*probe.SpanEvent {
 	path := unix.ByteSliceToString(e.Path[:])
 	scheme := unix.ByteSliceToString(e.Scheme[:])
 	opaque := unix.ByteSliceToString(e.Opaque[:])
-	urlHost := unix.ByteSliceToString(e.UrlHost[:])
+	host := unix.ByteSliceToString(e.Host[:])
 	rawPath := unix.ByteSliceToString(e.RawPath[:])
-	omitHost := e.OmitHost != 0
-	forceQuery := e.ForceQuery != 0
 	rawQuery := unix.ByteSliceToString(e.RawQuery[:])
+	username := unix.ByteSliceToString(e.Username[:])
 	fragment := unix.ByteSliceToString(e.Fragment[:])
 	rawFragment := unix.ByteSliceToString(e.RawFragment[:])
-	username := unix.ByteSliceToString(e.Username[:])
+	var user *url.Userinfo
+	if len(username) > 0 {
+		// check that username!="", otherwise url.User will instantiate
+		// an empty, non-nil *Userinfo object which url.String() will parse
+		// to just "@" in the final fullUrl
+		user = url.User(username)
+	}
+	/*
+		omitHost := e.OmitHost != 0
+		forceQuery := e.ForceQuery != 0
+
+	*/
 
 	sc := trace.NewSpanContext(trace.SpanContextConfig{
 		TraceID:    e.SpanContext.TraceID,
@@ -297,18 +304,22 @@ func convertEvent(e *event) []*probe.SpanEvent {
 	}
 
 	url := &url.URL{
+		Path:        path,
 		Scheme:      scheme,
 		Opaque:      opaque,
-		User:        url.User(username),
-		Host:        urlHost,
-		Path:        path,
+		Host:        host,
 		RawPath:     rawPath,
-		OmitHost:    omitHost,
-		ForceQuery:  forceQuery,
+		User:        user,
 		RawQuery:    rawQuery,
 		Fragment:    fragment,
 		RawFragment: rawFragment,
+		/*
+			OmitHost: omitHost,
+			ForceQuery:  forceQuery,
+
+		*/
 	}
+
 	fullURL := url.String()
 	attrs = append(attrs, semconv.URLFull(fullURL))
 

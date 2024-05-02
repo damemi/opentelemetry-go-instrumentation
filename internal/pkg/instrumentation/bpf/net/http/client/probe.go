@@ -245,10 +245,8 @@ type event struct {
 	RawQuery    [128]byte
 	Fragment    [50]byte
 	RawFragment [50]byte
-	/*
-		OmitHost   int
-		ForceQuery  int
-	*/
+	ForceQuery  uint8
+	OmitHost    uint8
 }
 
 func convertEvent(e *event) []*probe.SpanEvent {
@@ -262,6 +260,8 @@ func convertEvent(e *event) []*probe.SpanEvent {
 	username := unix.ByteSliceToString(e.Username[:])
 	fragment := unix.ByteSliceToString(e.Fragment[:])
 	rawFragment := unix.ByteSliceToString(e.RawFragment[:])
+	forceQuery := e.ForceQuery != 0
+	omitHost := e.OmitHost != 0
 	var user *url.Userinfo
 	if len(username) > 0 {
 		// check that username!="", otherwise url.User will instantiate
@@ -269,11 +269,6 @@ func convertEvent(e *event) []*probe.SpanEvent {
 		// to just "@" in the final fullUrl
 		user = url.User(username)
 	}
-	/*
-		omitHost := e.OmitHost != 0
-		forceQuery := e.ForceQuery != 0
-
-	*/
 
 	sc := trace.NewSpanContext(trace.SpanContextConfig{
 		TraceID:    e.SpanContext.TraceID,
@@ -313,11 +308,8 @@ func convertEvent(e *event) []*probe.SpanEvent {
 		RawQuery:    rawQuery,
 		Fragment:    fragment,
 		RawFragment: rawFragment,
-		/*
-			OmitHost: omitHost,
-			ForceQuery:  forceQuery,
-
-		*/
+		ForceQuery:  forceQuery,
+		OmitHost:    omitHost,
 	}
 
 	fullURL := url.String()

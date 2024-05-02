@@ -33,10 +33,8 @@ struct http_request_t {
     char raw_query[MAX_RAWQUERY_SIZE];
     char fragment[MAX_FRAGMENT_SIZE];
     char raw_fragment[MAX_RAWFRAGMENT_SIZE];
-    /*
-    int omit_host;
-    int force_query;
-    */
+    u8 force_query;
+    u8 omit_host;
 };
 
 struct {
@@ -285,27 +283,12 @@ int uprobe_Transport_roundTrip(struct pt_regs *ctx) {
     if (!get_go_string_from_user_ptr((void *)(url_ptr+raw_fragment_pos), httpReq->raw_fragment, sizeof(httpReq->raw_fragment))) {
         bpf_printk("uprobe_Transport_roundTrip: Failed to get RawFragment from Request.URL");
     }
-/*
-
-
-    // get OmitHost from Request.URL
-    if (!bpf_probe_read_user(httpReq->omit_host, sizeof(httpReq->omit_host), (void *)(url_ptr+omit_host_pos))) {
-        bpf_printk("uprobe_Transport_roundTrip: Failed to get OmitHost from Request.URL");
-
-    }
 
     // get ForceQuery from Request.URL
-    if (!bpf_probe_read_user(httpReq->force_query, sizeof(httpReq->force_query), (void *)(url_ptr+force_query_pos))) {
-        bpf_printk("uprobe_Transport_roundTrip: Failed to get ForceQuery from Request.URL");
-        return 0;
-    }
-    */
+    bpf_probe_read(&httpReq->force_query, sizeof(httpReq->force_query), (void *)(url_ptr+force_query_pos));
 
-/*
-
-
-
-    */
+    // get OmitHost from Request.URL
+    bpf_probe_read(&httpReq->omit_host, sizeof(httpReq->omit_host), (void *)(url_ptr+omit_host_pos));
 
     // get host from Request
     if (!get_go_string_from_user_ptr((void *)(req_ptr+request_host_pos), httpReq->host, sizeof(httpReq->host))) {

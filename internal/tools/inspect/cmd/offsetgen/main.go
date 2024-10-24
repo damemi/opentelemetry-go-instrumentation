@@ -50,16 +50,18 @@ func init() {
 }
 
 func manifests() ([]inspect.Manifest, error) {
-	goVers, err := GoVersions(">= " + minGoVersion)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Go versions: %w", err)
-	}
+
 
 	grpcVers, err := PkgVersions("google.golang.org/grpc")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get \"google.golang.org/grpc\" versions: %w", err)
 	}
 
+	/*
+	goVers, err := GoVersions(">= " + minGoVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Go versions: %w", err)
+	}
 	xNetVers, err := PkgVersions("golang.org/x/net")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get \"golang.org/x/net\" versions: %w", err)
@@ -74,12 +76,14 @@ func manifests() ([]inspect.Manifest, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get \"github.com/segmentio/kafka-go\" versions: %w", err)
 	}
+		*/
 
 	ren := func(src string) inspect.Renderer {
 		return inspect.NewRenderer(logger, src, inspect.DefaultFS)
 	}
 
 	return []inspect.Manifest{
+		/*
 		{
 			Application: inspect.Application{
 				Renderer:  ren("templates/runtime/*.tmpl"),
@@ -125,12 +129,14 @@ func manifests() ([]inspect.Manifest, error) {
 				structfield.NewID("std", "bufio", "Writer", "n"),
 			},
 		},
+		*/
 		{
 			Application: inspect.Application{
 				Renderer: ren("templates/google.golang.org/grpc/*.tmpl"),
 				Versions: grpcVers,
 			},
 			StructFields: []structfield.ID{
+				/*
 				structfield.NewID("google.golang.org/grpc", "google.golang.org/grpc/internal/transport", "Stream", "method"),
 				structfield.NewID("google.golang.org/grpc", "google.golang.org/grpc/internal/transport", "Stream", "id"),
 				structfield.NewID("google.golang.org/grpc", "google.golang.org/grpc/internal/transport", "Stream", "ctx"),
@@ -140,9 +146,11 @@ func manifests() ([]inspect.Manifest, error) {
 				structfield.NewID("google.golang.org/grpc", "google.golang.org/grpc/internal/transport", "headerFrame", "hf"),
 				structfield.NewID("google.golang.org/grpc", "google.golang.org/grpc/internal/status", "Error", "s"),
 				structfield.NewID("google.golang.org/grpc", "google.golang.org/grpc/internal/status", "Status", "s"),
+				*/
 				structfield.NewID("google.golang.org/grpc", "google.golang.org/genproto/googleapis/rpc/status", "Status", "Code"),
 			},
 		},
+		/*
 		{
 			Application: inspect.Application{
 				Renderer: ren("templates/golang.org/x/net/*.tmpl"),
@@ -186,6 +194,7 @@ func manifests() ([]inspect.Manifest, error) {
 				structfield.NewID("github.com/segmentio/kafka-go", "github.com/segmentio/kafka-go", "Conn", "clientID"),
 			},
 		},
+		*/
 	}, nil
 }
 

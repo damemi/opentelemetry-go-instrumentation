@@ -23,7 +23,10 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 
+	httpClient "go.opentelemetry.io/auto/internal/pkg/instrumentation/bpf/net/http/client"
+
 	"go.opentelemetry.io/auto/internal/pkg/instrumentation"
+	"go.opentelemetry.io/auto/internal/pkg/instrumentation/probe"
 	"go.opentelemetry.io/auto/internal/pkg/opentelemetry"
 	"go.opentelemetry.io/auto/internal/pkg/process"
 )
@@ -94,7 +97,23 @@ func NewInstrumentation(ctx context.Context, opts ...InstrumentationOption) (*In
 	}
 
 	cp := convertConfigProvider(c.cp)
-	mngr, err := instrumentation.NewManager(c.logger, ctrl, c.globalImpl, cp, Version())
+
+	// TODO: Probes should be passed to NewInstrumentation() when they're public
+	probes := []probe.BaseProbe{
+		//grpcClient.New(m.logger, m.version),
+		//grpcServer.New(m.logger, m.version),
+		//httpServer.New(m.logger, m.version),
+		httpClient.New(c.logger, Version(), ctrl.Trace),
+		//dbSql.New(m.logger, m.version),
+		//kafkaProducer.New(m.logger, m.version),
+		//kafkaConsumer.New(m.logger, m.version),
+		//autosdk.New(m.logger),
+	}
+	if c.globalImpl {
+		//p = append(p, otelTraceGlobal.New(m.logger))
+	}
+
+	mngr, err := instrumentation.NewManager(c.logger, ctrl, probes, cp, Version())
 	if err != nil {
 		return nil, err
 	}

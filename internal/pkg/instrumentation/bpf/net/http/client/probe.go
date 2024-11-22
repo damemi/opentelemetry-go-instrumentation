@@ -33,19 +33,20 @@ const (
 	pkg = "net/http"
 )
 
+type Config struct {
+	SupportsContextPropagation bool
+}
+
+type HttpClientProbe struct {
+	config Config
+	*probe.TargetSpanProducingProbe[Config, bpfObjects, event]
+}
+
 // New returns a new [probe.Probe].
-func New(logger *slog.Logger, version string) probe.Probe {
+func New(logger *slog.Logger, version string, handler func(ptrace.ScopeSpans)) probe.GoLibraryTelemetryProbe {
 	id := probe.ID{
 		SpanKind:        trace.SpanKindClient,
 		InstrumentedPkg: pkg,
-	}
-
-	uprobes := []probe.Uprobe{
-		{
-			Sym:         "net/http.(*Transport).roundTrip",
-			EntryProbe:  "uprobe_Transport_roundTrip",
-			ReturnProbe: "uprobe_Transport_roundTrip_Returns",
-		},
 	}
 
 	// If the kernel supports context propagation, we enable the
@@ -63,105 +64,18 @@ func New(logger *slog.Logger, version string) probe.Probe {
 		)
 	}
 
-	return &probe.SpanProducer[bpfObjects, event]{
-		Base: probe.Base[bpfObjects, event]{
-			ID:     id,
-			Logger: logger,
-			Consts: []probe.Const{
-				probe.RegistersABIConst{},
-				probe.AllocationConst{},
-				probe.StructFieldConst{
-					Key: "method_ptr_pos",
-					Val: structfield.NewID("std", "net/http", "Request", "Method"),
-				},
-				probe.StructFieldConst{
-					Key: "url_ptr_pos",
-					Val: structfield.NewID("std", "net/http", "Request", "URL"),
-				},
-				probe.StructFieldConst{
-					Key: "path_ptr_pos",
-					Val: structfield.NewID("std", "net/url", "URL", "Path"),
-				},
-				probe.StructFieldConst{
-					Key: "headers_ptr_pos",
-					Val: structfield.NewID("std", "net/http", "Request", "Header"),
-				},
-				probe.StructFieldConst{
-					Key: "ctx_ptr_pos",
-					Val: structfield.NewID("std", "net/http", "Request", "ctx"),
-				},
-				probe.StructFieldConst{
-					Key: "status_code_pos",
-					Val: structfield.NewID("std", "net/http", "Response", "StatusCode"),
-				},
-				probe.StructFieldConst{
-					Key: "request_host_pos",
-					Val: structfield.NewID("std", "net/http", "Request", "Host"),
-				},
-				probe.StructFieldConst{
-					Key: "request_proto_pos",
-					Val: structfield.NewID("std", "net/http", "Request", "Proto"),
-				},
-				probe.StructFieldConst{
-					Key: "io_writer_buf_ptr_pos",
-					Val: structfield.NewID("std", "bufio", "Writer", "buf"),
-				},
-				probe.StructFieldConst{
-					Key: "io_writer_n_pos",
-					Val: structfield.NewID("std", "bufio", "Writer", "n"),
-				},
-				probe.StructFieldConst{
-					Key: "scheme_pos",
-					Val: structfield.NewID("std", "net/url", "URL", "Scheme"),
-				},
-				probe.StructFieldConst{
-					Key: "opaque_pos",
-					Val: structfield.NewID("std", "net/url", "URL", "Opaque"),
-				},
-				probe.StructFieldConst{
-					Key: "user_ptr_pos",
-					Val: structfield.NewID("std", "net/url", "URL", "User"),
-				},
-				probe.StructFieldConst{
-					Key: "raw_path_pos",
-					Val: structfield.NewID("std", "net/url", "URL", "RawPath"),
-				},
-				probe.StructFieldConst{
-					Key: "omit_host_pos",
-					Val: structfield.NewID("std", "net/url", "URL", "OmitHost"),
-				},
-				probe.StructFieldConst{
-					Key: "force_query_pos",
-					Val: structfield.NewID("std", "net/url", "URL", "ForceQuery"),
-				},
-				probe.StructFieldConst{
-					Key: "raw_query_pos",
-					Val: structfield.NewID("std", "net/url", "URL", "RawQuery"),
-				},
-				probe.StructFieldConst{
-					Key: "fragment_pos",
-					Val: structfield.NewID("std", "net/url", "URL", "Fragment"),
-				},
-				probe.StructFieldConst{
-					Key: "raw_fragment_pos",
-					Val: structfield.NewID("std", "net/url", "URL", "RawFragment"),
-				},
-				probe.StructFieldConst{
-					Key: "username_pos",
-					Val: structfield.NewID("std", "net/url", "Userinfo", "username"),
-				},
-				probe.StructFieldConst{
-					Key: "url_host_pos",
-					Val: structfield.NewID("std", "net/url", "URL", "Host"),
-				},
-			},
-			Uprobes: uprobes,
-			SpecFn:  verifyAndLoadBpf,
-		},
-		Version:   version,
-		SchemaURL: semconv.SchemaURL,
-		ProcessFn: processFn,
-	}
+	p := &HttpClientProbe{}
+	p.ProbeID = id
+	p.Logger = logger
+	p.Version = version
+	p.SchemaURL = semconv.SchemaURL
+	p.Uprobes = uprobes
+	p.Consts = consts
+	p.SpecFn = verifyAndLoadBpf
+	p.ProcessFn = processFn
+	p.Handler = handler
+	return p
+
 }
 
 func verifyAndLoadBpf() (*ebpf.CollectionSpec, error) {
@@ -281,3 +195,102 @@ func processFn(e *event) ptrace.SpanSlice {
 
 	return spans
 }
+
+var (
+	uprobes = []probe.Uprobe{
+		{
+			Sym:         "net/http.(*Transport).roundTrip",
+			EntryProbe:  "uprobe_Transport_roundTrip",
+			ReturnProbe: "uprobe_Transport_roundTrip_Returns",
+		},
+	}
+
+	consts = []probe.Const{
+		probe.RegistersABIConst{},
+		probe.AllocationConst{},
+		probe.StructFieldConst{
+			Key: "method_ptr_pos",
+			Val: structfield.NewID("std", "net/http", "Request", "Method"),
+		},
+		probe.StructFieldConst{
+			Key: "url_ptr_pos",
+			Val: structfield.NewID("std", "net/http", "Request", "URL"),
+		},
+		probe.StructFieldConst{
+			Key: "path_ptr_pos",
+			Val: structfield.NewID("std", "net/url", "URL", "Path"),
+		},
+		probe.StructFieldConst{
+			Key: "headers_ptr_pos",
+			Val: structfield.NewID("std", "net/http", "Request", "Header"),
+		},
+		probe.StructFieldConst{
+			Key: "ctx_ptr_pos",
+			Val: structfield.NewID("std", "net/http", "Request", "ctx"),
+		},
+		probe.StructFieldConst{
+			Key: "status_code_pos",
+			Val: structfield.NewID("std", "net/http", "Response", "StatusCode"),
+		},
+		probe.StructFieldConst{
+			Key: "request_host_pos",
+			Val: structfield.NewID("std", "net/http", "Request", "Host"),
+		},
+		probe.StructFieldConst{
+			Key: "request_proto_pos",
+			Val: structfield.NewID("std", "net/http", "Request", "Proto"),
+		},
+		probe.StructFieldConst{
+			Key: "io_writer_buf_ptr_pos",
+			Val: structfield.NewID("std", "bufio", "Writer", "buf"),
+		},
+		probe.StructFieldConst{
+			Key: "io_writer_n_pos",
+			Val: structfield.NewID("std", "bufio", "Writer", "n"),
+		},
+		probe.StructFieldConst{
+			Key: "scheme_pos",
+			Val: structfield.NewID("std", "net/url", "URL", "Scheme"),
+		},
+		probe.StructFieldConst{
+			Key: "opaque_pos",
+			Val: structfield.NewID("std", "net/url", "URL", "Opaque"),
+		},
+		probe.StructFieldConst{
+			Key: "user_ptr_pos",
+			Val: structfield.NewID("std", "net/url", "URL", "User"),
+		},
+		probe.StructFieldConst{
+			Key: "raw_path_pos",
+			Val: structfield.NewID("std", "net/url", "URL", "RawPath"),
+		},
+		probe.StructFieldConst{
+			Key: "omit_host_pos",
+			Val: structfield.NewID("std", "net/url", "URL", "OmitHost"),
+		},
+		probe.StructFieldConst{
+			Key: "force_query_pos",
+			Val: structfield.NewID("std", "net/url", "URL", "ForceQuery"),
+		},
+		probe.StructFieldConst{
+			Key: "raw_query_pos",
+			Val: structfield.NewID("std", "net/url", "URL", "RawQuery"),
+		},
+		probe.StructFieldConst{
+			Key: "fragment_pos",
+			Val: structfield.NewID("std", "net/url", "URL", "Fragment"),
+		},
+		probe.StructFieldConst{
+			Key: "raw_fragment_pos",
+			Val: structfield.NewID("std", "net/url", "URL", "RawFragment"),
+		},
+		probe.StructFieldConst{
+			Key: "username_pos",
+			Val: structfield.NewID("std", "net/url", "Userinfo", "username"),
+		},
+		probe.StructFieldConst{
+			Key: "url_host_pos",
+			Val: structfield.NewID("std", "net/url", "URL", "Host"),
+		},
+	}
+)

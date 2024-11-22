@@ -23,15 +23,19 @@ import (
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"go.opentelemetry.io/auto/internal/pkg/instrumentation/probe"
-	"go.opentelemetry.io/auto/internal/pkg/instrumentation/probe/sampling"
 	"go.opentelemetry.io/auto/internal/pkg/opentelemetry"
 	"go.opentelemetry.io/auto/internal/pkg/process"
 	"go.opentelemetry.io/auto/internal/pkg/process/binary"
+
+	httpClient "go.opentelemetry.io/auto/internal/pkg/instrumentation/bpf/net/http/client"
+	httpServer "go.opentelemetry.io/auto/internal/pkg/instrumentation/bpf/net/http/server"
 )
 
 func TestProbeFiltering(t *testing.T) {
 	ver, err := version.NewVersion("1.20.0")
 	assert.NoError(t, err)
+
+	mockExeAndBpffs(t)
 
 	t.Run("empty target details", func(t *testing.T) {
 		m := fakeManager(t)
@@ -189,7 +193,11 @@ func TestDependencyChecks(t *testing.T) {
 }
 
 func fakeManager(t *testing.T) *Manager {
-	m, err := NewManager(slog.Default(), nil, true, NewNoopConfigProvider(nil), "")
+	probes := []probe.BaseProbe{
+		httpClient.New(nil, "", nil, httpClient.Config{}),
+		httpServer.New(nil, "", nil),
+	}
+	m, err := NewManager(slog.Default(), nil, probes, NewNoopConfigProvider(nil), "")
 	assert.NoError(t, err)
 	assert.NotNil(t, m)
 
@@ -246,7 +254,7 @@ func TestRunStoppingByContext(t *testing.T) {
 	m := &Manager{
 		otelController: ctrl,
 		logger:         slog.Default(),
-		probes:         map[probe.ID]probe.Probe{{}: p},
+		probes:         map[probe.ID]probe.BaseProbe{{}: p},
 		cp:             NewNoopConfigProvider(nil),
 	}
 
@@ -295,7 +303,7 @@ func TestRunStoppingByStop(t *testing.T) {
 	m := &Manager{
 		otelController: ctrl,
 		logger:         slog.Default(),
-		probes:         map[probe.ID]probe.Probe{{}: &p},
+		probes:         map[probe.ID]probe.BaseProbe{{}: &p},
 		cp:             NewNoopConfigProvider(nil),
 	}
 
@@ -327,7 +335,7 @@ func TestRunStoppingByStop(t *testing.T) {
 }
 
 type slowProbe struct {
-	probe.Probe
+	probe.BaseProbe
 
 	closeSignal chan struct{}
 	stop        chan struct{}
@@ -340,11 +348,18 @@ func newSlowProbe(stop chan struct{}) slowProbe {
 	}
 }
 
-func (p slowProbe) Load(*link.Executable, *process.TargetDetails, *sampling.Config) error {
+var _ probe.BaseProbe = (*slowProbe)(nil)
+var _ probe.RunnableProbe = (*slowProbe)(nil)
+
+func (p slowProbe) Load() error {
 	return nil
 }
 
-func (p slowProbe) Run(func(ptrace.ScopeSpans)) {
+func (p slowProbe) Attach() error {
+	return nil
+}
+
+func (p slowProbe) Run() {
 }
 
 func (p slowProbe) Close() error {
@@ -354,17 +369,35 @@ func (p slowProbe) Close() error {
 }
 
 type noopProbe struct {
-	loaded, running, closed atomic.Bool
+	loaded, attached, running, closed atomic.Bool
 }
 
-var _ probe.Probe = (*noopProbe)(nil)
+var _ probe.BaseProbe = (*noopProbe)(nil)
+var _ probe.RunnableProbe = (*noopProbe)(nil)
 
-func (p *noopProbe) Load(*link.Executable, *process.TargetDetails, *sampling.Config) error {
+func (p *noopProbe) ApplyConfig(probe.Config) error {
+	return nil
+}
+
+func (p *noopProbe) Load() error {
 	p.loaded.Store(true)
 	return nil
 }
 
-func (p *noopProbe) Run(func(ptrace.ScopeSpans)) {
+func (p *noopProbe) Attach() error {
+	p.attached.Store(true)
+	return nil
+}
+
+func (p *noopProbe) GetLogger() *slog.Logger {
+	return nil
+}
+
+func (p *noopProbe) ID() probe.ID {
+	return probe.ID{InstrumentedPkg: "noop"}
+}
+
+func (p *noopProbe) Run() {
 	p.running.Store(true)
 }
 
@@ -419,7 +452,7 @@ func TestConfigProvider(t *testing.T) {
 
 	m := &Manager{
 		logger: slog.Default(),
-		probes: map[probe.ID]probe.Probe{
+		probes: map[probe.ID]probe.BaseProbe{
 			netHTTPClientProbeID:       &noopProbe{},
 			netHTTPServerProbeID:       &noopProbe{},
 			somePackageProducerProbeID: &noopProbe{},
@@ -523,24 +556,35 @@ func TestConfigProvider(t *testing.T) {
 	})
 }
 
+var _ probe.BaseProbe = (*hangingProbe)(nil)
+var _ probe.RunnableProbe = (*hangingProbe)(nil)
+
 type hangingProbe struct {
-	probe.Probe
+	probe.BaseProbe
 
 	closeReturned chan struct{}
+	handler       func(ptrace.ScopeSpans)
 }
 
-func newHangingProbe() *hangingProbe {
-	return &hangingProbe{closeReturned: make(chan struct{})}
+func newHangingProbe(handler func(ptrace.ScopeSpans)) *hangingProbe {
+	return &hangingProbe{
+		closeReturned: make(chan struct{}),
+		handler:       handler,
+	}
 }
 
-func (p *hangingProbe) Load(*link.Executable, *process.TargetDetails, *sampling.Config) error {
+func (p *hangingProbe) Load() error {
 	return nil
 }
 
-func (p *hangingProbe) Run(handle func(ptrace.ScopeSpans)) {
+func (p *hangingProbe) Attach() error {
+	return nil
+}
+
+func (p *hangingProbe) Run() {
 	<-p.closeReturned
 	// Write after Close has returned.
-	handle(ptrace.NewScopeSpans())
+	p.handler(ptrace.NewScopeSpans())
 }
 
 func (p *hangingProbe) Close() error {
@@ -549,17 +593,17 @@ func (p *hangingProbe) Close() error {
 }
 
 func TestRunStopDeadlock(t *testing.T) {
-	// Regression test for #1228.
-	p := newHangingProbe()
-
 	tp := new(shutdownTracerProvider)
 	ctrl, err := opentelemetry.NewController(slog.Default(), tp)
 	require.NoError(t, err)
 
+	// Regression test for #1228.
+	p := newHangingProbe(ctrl.Trace)
+
 	m := &Manager{
 		otelController: ctrl,
 		logger:         slog.Default(),
-		probes:         map[probe.ID]probe.Probe{{}: p},
+		probes:         map[probe.ID]probe.BaseProbe{{}: p},
 		cp:             NewNoopConfigProvider(nil),
 	}
 
@@ -607,7 +651,7 @@ func TestStopBeforeLoad(t *testing.T) {
 	m := &Manager{
 		otelController: ctrl,
 		logger:         slog.Default(),
-		probes:         map[probe.ID]probe.Probe{{}: &p},
+		probes:         map[probe.ID]probe.BaseProbe{{}: &p},
 		cp:             NewNoopConfigProvider(nil),
 	}
 
@@ -627,7 +671,7 @@ func TestStopBeforeRun(t *testing.T) {
 	m := &Manager{
 		otelController: ctrl,
 		logger:         slog.Default(),
-		probes:         map[probe.ID]probe.Probe{{}: &p},
+		probes:         map[probe.ID]probe.BaseProbe{{}: &p},
 		cp:             NewNoopConfigProvider(nil),
 	}
 

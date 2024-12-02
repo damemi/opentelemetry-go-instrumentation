@@ -159,7 +159,6 @@ func main() {
 	tests := []struct {
 		url string
 	}{
-
 		{url: "http://localhost:8080/query_db"},
 		{url: "http://localhost:8080/insert"},
 		{url: "http://localhost:8080/update"},

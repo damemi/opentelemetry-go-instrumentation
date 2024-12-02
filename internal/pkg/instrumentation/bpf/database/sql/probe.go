@@ -205,8 +205,7 @@ func parseQuery(query string) (string, []string, error) {
 func extractTables(exprs sqlparser.TableExprs) []string {
 	var tables []string
 	for _, expr := range exprs {
-		switch tableExpr := expr.(type) {
-		case *sqlparser.AliasedTableExpr:
+		if tableExpr, ok := expr.(*sqlparser.AliasedTableExpr); ok {
 			if name, ok := tableExpr.Expr.(sqlparser.TableName); ok {
 				tables = append(tables, name.Name.String())
 			}

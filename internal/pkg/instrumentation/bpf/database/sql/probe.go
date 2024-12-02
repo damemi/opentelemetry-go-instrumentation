@@ -4,11 +4,12 @@
 package sql
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
 
-	sql "github.com/xwb1989/sqlparser"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -31,7 +32,7 @@ const (
 	IncludeDBStatementEnvVar = "OTEL_GO_AUTO_INCLUDE_DB_STATEMENT"
 
 	// IncludeDBOperationEnvVar is the environment variable to opt-in for sql query operation in the trace.
-	IncludeDBOperationEnvVar = "OTEL_GO_AUTO_INCLUDE_DB_OPERATION"
+	IncludeDBOperationEnvVar = "OTEL_GO_AUTO_PARSE_DB_STATEMENT"
 )
 
 // New returns a new [probe.Probe].
@@ -106,23 +107,23 @@ func processFn(e *event) ptrace.SpanSlice {
 	if includeOperationVal != "" {
 		include, err := strconv.ParseBool(includeOperationVal)
 		if err == nil && include {
-			q, err := sql.Parse(query)
+			operation, tables, err := parseQuery(query)
 			if err == nil {
-				operation := ""
-				switch q.(type) {
-				case *sql.Select:
-					operation = "SELECT"
-				case *sql.Update:
-					operation = "UPDATE"
-				case *sql.Insert:
-					operation = "INSERT"
-				case *sql.Delete:
-					operation = "DELETE"
-				}
-
-				if operation != "" {
+				summary := ""
+				if len(operation) > 0 {
 					span.Attributes().PutStr(string(semconv.DBOperationNameKey), operation)
-					span.SetName(operation)
+					summary = operation
+				}
+				if len(tables) > 0 {
+					// TODO: figure out a heuristic besides just using the first table in the list of sql nodes
+					span.Attributes().PutStr(string(semconv.DBCollectionNameKey), tables[0])
+					// if we have an operation and table, build {db.query.summary} with {db.operation.name} + {target}
+					if summary != "" {
+						summary = fmt.Sprintf("%s %s", summary, tables[0])
+					}
+				}
+				if summary != "" {
+					span.SetName(summary)
 				}
 			}
 		}
@@ -142,4 +143,74 @@ func shouldIncludeDBStatement() bool {
 	}
 
 	return false
+}
+
+// Parse takes a SQL query string and returns the parsed query statement type
+// and table name(s), or an error if parsing failed.
+func parseQuery(query string) (string, []string, error) {
+	p, err := sqlparser.New(sqlparser.Options{})
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create parser: %w", err)
+	}
+
+	stmt, err := p.Parse(query)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to parse query: %w", err)
+	}
+
+	var statementType string
+	var tables []string
+
+	switch stmt := stmt.(type) {
+	case *sqlparser.Select:
+		statementType = "SELECT"
+		tables = extractTables(stmt.From)
+	case *sqlparser.Update:
+		statementType = "UPDATE"
+		tables = extractTables(stmt.TableExprs)
+	case *sqlparser.Insert:
+		statementType = "INSERT"
+		tables = []string{stmt.Table.TableNameString()}
+	case *sqlparser.Delete:
+		statementType = "DELETE"
+		tables = extractTables(stmt.TableExprs)
+	case *sqlparser.CreateTable:
+		statementType = "CREATE TABLE"
+		tables = []string{stmt.Table.Name.String()}
+	case *sqlparser.AlterTable:
+		statementType = "ALTER TABLE"
+		tables = []string{stmt.Table.Name.String()}
+	case *sqlparser.TruncateTable:
+		statementType = "TRUNCATE TABLE"
+		tables = []string{stmt.Table.Name.String()}
+	case *sqlparser.DropTable:
+		statementType = "DROP TABLE"
+		for _, table := range stmt.FromTables {
+			tables = append(tables, table.Name.String())
+		}
+	case *sqlparser.CreateDatabase:
+		statementType = "CREATE DATABASE"
+		tables = []string{stmt.DBName.String()}
+	case *sqlparser.DropDatabase:
+		statementType = "DROP DATABASE"
+		tables = []string{stmt.DBName.String()}
+	default:
+		return "UNKNOWN", nil, fmt.Errorf("unsupported statement type")
+	}
+
+	return statementType, tables, nil
+}
+
+// extractTables extracts table names from a list of SQL nodes.
+func extractTables(exprs sqlparser.TableExprs) []string {
+	var tables []string
+	for _, expr := range exprs {
+		switch tableExpr := expr.(type) {
+		case *sqlparser.AliasedTableExpr:
+			if name, ok := tableExpr.Expr.(sqlparser.TableName); ok {
+				tables = append(tables, name.Name.String())
+			}
+		}
+	}
+	return tables
 }

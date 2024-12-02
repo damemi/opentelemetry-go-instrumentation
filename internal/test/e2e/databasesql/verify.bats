@@ -15,19 +15,44 @@ SCOPE="go.opentelemetry.io/auto/database/sql"
   assert_equal "$result" "\"DELETE FROM contacts WHERE first_name = 'Mike'\""
   result=$(span_attributes_for ${SCOPE} | jq "select(.key == \"db.query.text\").value.stringValue" | jq -Rn '[inputs]' | jq -r .[4])
   assert_equal "$result" "\"DROP TABLE contacts\""
+  result=$(span_attributes_for ${SCOPE} | jq "select(.key == \"db.query.text\").value.stringValue" | jq -Rn '[inputs]' | jq -r .[5])
+  assert_equal "$result" "\"CREATE TABLE foo (Bar int)\""
+  result=$(span_attributes_for ${SCOPE} | jq "select(.key == \"db.query.text\").value.stringValue" | jq -Rn '[inputs]' | jq -r .[6])
+  assert_equal "$result" "\"ALTER TABLE foo ADD baz int\""
+}
+
+@test "${SCOPE} :: includes db.collection.name attribute" {
+  result=$(span_attributes_for ${SCOPE} | jq "select(.key == \"db.collection.name\").value.stringValue" | jq -Rn '[inputs]' | jq -r .[0])
+  assert_equal "$result" '"contacts"'
+  result=$(span_attributes_for ${SCOPE} | jq "select(.key == \"db.collection.name\").value.stringValue" | jq -Rn '[inputs]' | jq -r .[1])
+  assert_equal "$result" '"contacts"'
+  result=$(span_attributes_for ${SCOPE} | jq "select(.key == \"db.collection.name\").value.stringValue" | jq -Rn '[inputs]' | jq -r .[2])
+  assert_equal "$result" '"contacts"'
+  result=$(span_attributes_for ${SCOPE} | jq "select(.key == \"db.collection.name\").value.stringValue" | jq -Rn '[inputs]' | jq -r .[3])
+  assert_equal "$result" '"contacts"'
+  result=$(span_attributes_for ${SCOPE} | jq "select(.key == \"db.collection.name\").value.stringValue" | jq -Rn '[inputs]' | jq -r .[4])
+  assert_equal "$result" '"contacts"'
+  result=$(span_attributes_for ${SCOPE} | jq "select(.key == \"db.collection.name\").value.stringValue" | jq -Rn '[inputs]' | jq -r .[5])
+  assert_equal "$result" '"foo"'
+  result=$(span_attributes_for ${SCOPE} | jq "select(.key == \"db.collection.name\").value.stringValue" | jq -Rn '[inputs]' | jq -r .[6])
+  assert_equal "$result" '"foo"'
 }
 
 @test "${SCOPE} :: span name is set correctly" {
   result=$(span_names_for ${SCOPE} | jq -Rn '[inputs]' | jq -r .[0])
-  assert_equal "$result" '"SELECT"'
+  assert_equal "$result" '"SELECT contacts"'
   result=$(span_names_for ${SCOPE} | jq -Rn '[inputs]' | jq -r .[1])
-  assert_equal "$result" '"INSERT"'
+  assert_equal "$result" '"INSERT contacts"'
   result=$(span_names_for ${SCOPE} | jq -Rn '[inputs]' | jq -r .[2])
-  assert_equal "$result" '"UPDATE"'
+  assert_equal "$result" '"UPDATE contacts"'
   result=$(span_names_for ${SCOPE} | jq -Rn '[inputs]' | jq -r .[3])
-  assert_equal "$result" '"DELETE"'
+  assert_equal "$result" '"DELETE contacts"'
   result=$(span_names_for ${SCOPE} | jq -Rn '[inputs]' | jq -r .[4])
-  assert_equal "$result" '"DB"'
+  assert_equal "$result" '"DROP TABLE contacts"'
+  result=$(span_names_for ${SCOPE} | jq -Rn '[inputs]' | jq -r .[5])
+  assert_equal "$result" '"CREATE TABLE foo"'
+  result=$(span_names_for ${SCOPE} | jq -Rn '[inputs]' | jq -r .[6])
+  assert_equal "$result" '"ALTER TABLE foo"'
 }
 
 @test "${SCOPE} :: trace ID present and valid in all spans" {
@@ -40,6 +65,10 @@ SCOPE="go.opentelemetry.io/auto/database/sql"
   trace_id=$(spans_from_scope_named ${SCOPE} | jq ".traceId" | jq -Rn '[inputs]' | jq -r .[3])
   assert_regex "$trace_id" ${MATCH_A_TRACE_ID}
   trace_id=$(spans_from_scope_named ${SCOPE} | jq ".traceId" | jq -Rn '[inputs]' | jq -r .[4])
+  assert_regex "$trace_id" ${MATCH_A_TRACE_ID}
+  trace_id=$(spans_from_scope_named ${SCOPE} | jq ".traceId" | jq -Rn '[inputs]' | jq -r .[5])
+  assert_regex "$trace_id" ${MATCH_A_TRACE_ID}
+  trace_id=$(spans_from_scope_named ${SCOPE} | jq ".traceId" | jq -Rn '[inputs]' | jq -r .[6])
   assert_regex "$trace_id" ${MATCH_A_TRACE_ID}
 }
 
@@ -54,6 +83,10 @@ SCOPE="go.opentelemetry.io/auto/database/sql"
   assert_regex "$span_id" ${MATCH_A_SPAN_ID}
   span_id=$(spans_from_scope_named ${SCOPE} | jq ".spanId" | jq -Rn '[inputs]' | jq -r .[4])
   assert_regex "$span_id" ${MATCH_A_SPAN_ID}
+  span_id=$(spans_from_scope_named ${SCOPE} | jq ".spanId" | jq -Rn '[inputs]' | jq -r .[5])
+  assert_regex "$span_id" ${MATCH_A_SPAN_ID}
+  span_id=$(spans_from_scope_named ${SCOPE} | jq ".spanId" | jq -Rn '[inputs]' | jq -r .[6])
+  assert_regex "$span_id" ${MATCH_A_SPAN_ID}
 }
 
 @test "${SCOPE} :: parent span ID present and valid in all spans" {
@@ -66,6 +99,10 @@ SCOPE="go.opentelemetry.io/auto/database/sql"
   parent_span_id=$(spans_from_scope_named ${SCOPE} | jq ".parentSpanId" | jq -Rn '[inputs]' | jq -r .[3])
   assert_regex "$parent_span_id" ${MATCH_A_SPAN_ID}
   parent_span_id=$(spans_from_scope_named ${SCOPE} | jq ".parentSpanId" | jq -Rn '[inputs]' | jq -r .[4])
+  assert_regex "$parent_span_id" ${MATCH_A_SPAN_ID}
+  parent_span_id=$(spans_from_scope_named ${SCOPE} | jq ".parentSpanId" | jq -Rn '[inputs]' | jq -r .[5])
+  assert_regex "$parent_span_id" ${MATCH_A_SPAN_ID}
+  parent_span_id=$(spans_from_scope_named ${SCOPE} | jq ".parentSpanId" | jq -Rn '[inputs]' | jq -r .[6])
   assert_regex "$parent_span_id" ${MATCH_A_SPAN_ID}
 }
 

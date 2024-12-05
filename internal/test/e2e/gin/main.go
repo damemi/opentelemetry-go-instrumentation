@@ -4,6 +4,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 func main() {
 	r := gin.Default()
+	r.Use(testMiddleware)
 	r.GET("/hello-gin", func(c *gin.Context) {
 		c.String(http.StatusOK, "hello\n")
 	})
@@ -38,4 +40,9 @@ func main() {
 
 	// give time for auto-instrumentation to report signal
 	time.Sleep(5 * time.Second)
+}
+
+func testMiddleware(c *gin.Context) {
+	fmt.Println("middleware called")
+	c.Next()
 }

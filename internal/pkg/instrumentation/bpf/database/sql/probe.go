@@ -170,7 +170,7 @@ func parseQuery(query string) (string, []string, error) {
 		tables = extractTables(stmt.TableExprs)
 	case *sqlparser.Insert:
 		statementType = "INSERT"
-		tables = []string{stmt.Table.TableNameString()}
+		tables = []string{stmt.Table.As.String()}
 	case *sqlparser.Delete:
 		statementType = "DELETE"
 		tables = extractTables(stmt.TableExprs)
